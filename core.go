@@ -28,9 +28,10 @@ import (
 
 // Core is a custom zapcore.Core implementation that writes logs to Google Cloud Logging.
 type Core struct {
-	out          *logging.Logger
-	enc          zapcore.Encoder
-	LevelEnabler zapcore.LevelEnabler
+	out             *logging.Logger
+	enc             zapcore.Encoder
+	LevelEnabler    zapcore.LevelEnabler
+	LevelToSeverity func(zapcore.Level) logging.Severity
 }
 
 // NewCore creates a new Core based on the given configuration.
@@ -39,14 +40,16 @@ type Core struct {
 // - out: The Google Cloud Logging logger to write logs to.
 // - config: The configuration for the Encoder.
 // - level: The logging level.
+// - levelToSeverity: A function that converts a zapcore level to a Google Cloud Logging severity.
 //
 // Returns:
 // - A new Core.
-func newCore(out *logging.Logger, config EncoderConfig, level zapcore.LevelEnabler) *Core {
+func newCore(out *logging.Logger, config EncoderConfig, level zapcore.LevelEnabler, levelToSeverity func(zapcore.Level) logging.Severity) *Core {
 	return &Core{
-		out:          out,
-		enc:          newEncoder(config),
-		LevelEnabler: level,
+		out:             out,
+		enc:             newEncoder(config),
+		LevelEnabler:    level,
+		LevelToSeverity: levelToSeverity,
 	}
 }
 
@@ -115,7 +118,7 @@ func (c *Core) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 
 	entry := logging.Entry{
 		Timestamp: ent.Time,
-		Severity:  toSeverity(ent.Level),
+		Severity:  c.LevelToSeverity(ent.Level),
 		Payload:   buf.String(),
 	}
 
@@ -123,7 +126,7 @@ func (c *Core) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	c.out.Log(entry)
 
 	// Since we may be crashing the program, sync the output.
-	if ent.Level > zapcore.ErrorLevel {
+	if ent.Level >= zapcore.ErrorLevel {
 		err := c.Sync()
 		if err != nil {
 			return err
@@ -147,9 +150,10 @@ func (c *Core) Sync() error {
 // - A copy of the Core.
 func (c *Core) clone() *Core {
 	return &Core{
-		LevelEnabler: c.LevelEnabler,
-		enc:          c.enc.Clone(),
-		out:          c.out,
+		LevelEnabler:    c.LevelEnabler,
+		enc:             c.enc.Clone(),
+		out:             c.out,
+		LevelToSeverity: c.LevelToSeverity,
 	}
 }
 
@@ -164,33 +168,5 @@ func (c *Core) clone() *Core {
 func addFields(enc zapcore.ObjectEncoder, fields []zapcore.Field) {
 	for i := range fields {
 		fields[i].AddTo(enc)
-	}
-}
-
-// toSeverity converts the given zapcore level to a Google Cloud Logging severity.
-//
-// Parameters:
-// - l: The zapcore level to convert.
-//
-// Returns:
-// - The converted logging severity.
-func toSeverity(l zapcore.Level) logging.Severity {
-	switch l {
-	case zapcore.DebugLevel:
-		return logging.Debug
-	case zapcore.InfoLevel:
-		return logging.Info
-	case zapcore.WarnLevel:
-		return logging.Warning
-	case zapcore.ErrorLevel:
-		return logging.Error
-	case zapcore.DPanicLevel:
-		return logging.Critical
-	case zapcore.PanicLevel:
-		return logging.Critical
-	case zapcore.FatalLevel:
-		return logging.Critical
-	default:
-		return logging.Default
 	}
 }

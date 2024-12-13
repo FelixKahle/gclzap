@@ -36,7 +36,7 @@ import (
 // Returns:
 // - A new zap.Logger that writes logs to the given Google Cloud Logging logger.
 func New(out *logging.Logger, config Config, options ...zap.Option) *zap.Logger {
-	core := newCore(out, config.EncoderConfig, config.Level)
+	core := newCore(out, config.EncoderConfig, config.Level, config.LevelToSeverity)
 
 	return zap.New(core, options...)
 }

@@ -29,8 +29,26 @@ import (
 
 // Config is a configuration struct for the zap.Logger that writes logs to Google Cloud Logging.
 type Config struct {
-	EncoderConfig EncoderConfig
-	Level         zapcore.Level
+	EncoderConfig   EncoderConfig
+	Level           zapcore.Level
+	LevelToSeverity func(zapcore.Level) logging.Severity
+}
+
+// NewConfig creates a new configuration for the zap.Logger that writes logs to Google Cloud Logging.
+//
+// Parameters:
+// - encoderConfig: The configuration for the encoder.
+// - level: The log level to use.
+// - levelToSeverity: A function that converts a zapcore level to a Google Cloud Logging severity.
+//
+// Returns:
+// - A new configuration for the zap.Logger that writes logs to Google Cloud Logging.
+func NewConfig(encoderConfig EncoderConfig, level zapcore.Level, levelToSeverity func(zapcore.Level) logging.Severity) Config {
+	return Config{
+		EncoderConfig:   encoderConfig,
+		Level:           level,
+		LevelToSeverity: levelToSeverity,
+	}
 }
 
 // Build creates a new zap.Logger that writes logs to Google Cloud Logging.
@@ -50,8 +68,9 @@ func (c Config) Build(logger *logging.Logger) *zap.Logger {
 // - A new configuration for the zap.Logger that writes logs to Google Cloud Logging.
 func NewProductionConfig() Config {
 	return Config{
-		EncoderConfig: DefaultEncoderConfig(),
-		Level:         zapcore.InfoLevel,
+		EncoderConfig:   DefaultEncoderConfig(),
+		Level:           zapcore.InfoLevel,
+		LevelToSeverity: toSeverity,
 	}
 }
 
@@ -61,7 +80,36 @@ func NewProductionConfig() Config {
 // - A new configuration for the zap.Logger that writes logs to Google Cloud Logging.
 func NewDevelopmentConfig() Config {
 	return Config{
-		EncoderConfig: DefaultEncoderConfig(),
-		Level:         zapcore.DebugLevel,
+		EncoderConfig:   DefaultEncoderConfig(),
+		Level:           zapcore.DebugLevel,
+		LevelToSeverity: toSeverity,
+	}
+}
+
+// toSeverity converts the given zapcore level to a Google Cloud Logging severity.
+//
+// Parameters:
+// - l: The zapcore level to convert.
+//
+// Returns:
+// - The converted logging severity.
+func toSeverity(l zapcore.Level) logging.Severity {
+	switch l {
+	case zapcore.DebugLevel:
+		return logging.Debug
+	case zapcore.InfoLevel:
+		return logging.Info
+	case zapcore.WarnLevel:
+		return logging.Warning
+	case zapcore.ErrorLevel:
+		return logging.Error
+	case zapcore.DPanicLevel:
+		return logging.Critical
+	case zapcore.PanicLevel:
+		return logging.Critical
+	case zapcore.FatalLevel:
+		return logging.Critical
+	default:
+		return logging.Default
 	}
 }
